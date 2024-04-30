@@ -115,6 +115,7 @@ extern "C" {
 #define Board_PIN_BTN2          CC1310_LAUNCHXL_PIN_BTN2
 #define Board_PIN_LED0          CC1310_LAUNCHXL_PIN_RLED
 #define Board_PIN_LED1          CC1310_LAUNCHXL_PIN_GLED
+
 #define Board_PIN_LED2          CC1310_LAUNCHXL_PIN_RLED
 #define Board_PIN_RLED          CC1310_LAUNCHXL_PIN_RLED
 #define Board_PIN_GLED          CC1310_LAUNCHXL_PIN_GLED

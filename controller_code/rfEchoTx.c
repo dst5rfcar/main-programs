@@ -51,13 +51,15 @@
 
 /***** Defines *****/
 /* Packet TX/RX Configuration */
-#define PAYLOAD_LENGTH      30
+#define TX_PAYLOAD_LENGTH      2
+#define RX_PAYLOAD_LENGTH      3
 /* Set packet interval to 1000ms */
 #define PACKET_INTERVAL     (uint32_t)(4000000*1.0f)
 /* Set Receive timeout to 500ms */
 #define RX_TIMEOUT          (uint32_t)(4000000*0.5f)
 /* NOTE: Only two data entries supported at the moment */
 #define NUM_DATA_ENTRIES    2
+
 /* The Data Entries data field will contain:
  * 1 Header byte (RF_cmdPropRx.rxConf.bIncludeHdr = 0x1)
  * Max 30 payload bytes
@@ -86,18 +88,18 @@ static PIN_State ledPinState;
 #pragma DATA_ALIGN(rxDataEntryBuffer, 4)
 static uint8_t
 rxDataEntryBuffer[RF_QUEUE_DATA_ENTRY_BUFFER_SIZE(NUM_DATA_ENTRIES,
-                                                  PAYLOAD_LENGTH,
+                                                  RX_PAYLOAD_LENGTH,
                                                   NUM_APPENDED_BYTES)];
 #elif defined(__IAR_SYSTEMS_ICC__)
 #pragma data_alignment = 4
 static uint8_t
 rxDataEntryBuffer[RF_QUEUE_DATA_ENTRY_BUFFER_SIZE(NUM_DATA_ENTRIES,
-                                                  PAYLOAD_LENGTH,
+                                                  RX_PAYLOAD_LENGTH,
                                                   NUM_APPENDED_BYTES)];
 #elif defined(__GNUC__)
 static uint8_t
 rxDataEntryBuffer[RF_QUEUE_DATA_ENTRY_BUFFER_SIZE(NUM_DATA_ENTRIES,
-                                                  PAYLOAD_LENGTH,
+                                                  RX_PAYLOAD_LENGTH,
                                                   NUM_APPENDED_BYTES)]
                                                   __attribute__((aligned(4)));
 #else
@@ -112,9 +114,10 @@ static dataQueue_t dataQueue;
 static rfc_dataEntryGeneral_t* currentDataEntry;
 static uint8_t packetLength;
 static uint8_t* packetDataPointer;
+static uint8_t rssi_rec;
 
-static uint8_t txPacket[PAYLOAD_LENGTH];
-static uint8_t rxPacket[PAYLOAD_LENGTH + NUM_APPENDED_BYTES - 1];
+static uint8_t txPacket[TX_PAYLOAD_LENGTH];
+static uint8_t rxPacket[RX_PAYLOAD_LENGTH + NUM_APPENDED_BYTES - 1];
 static uint16_t seqNumber;
 
 static volatile bool bRxSuccess = false;
@@ -157,7 +160,7 @@ void *mainThread(void *arg0)
                            rxDataEntryBuffer,
                            sizeof(rxDataEntryBuffer),
                            NUM_DATA_ENTRIES,
-                           PAYLOAD_LENGTH + NUM_APPENDED_BYTES))
+                           RX_PAYLOAD_LENGTH + NUM_APPENDED_BYTES))
     {
         /* Failed to allocate space for all data entries */
         PIN_setOutputValue(ledPinHandle, Board_PIN_LED1, 1);
@@ -166,7 +169,7 @@ void *mainThread(void *arg0)
     }
 
     /* Modify CMD_PROP_TX and CMD_PROP_RX commands for application needs */
-    RF_cmdPropTx.pktLen = PAYLOAD_LENGTH;
+    RF_cmdPropTx.pktLen = TX_PAYLOAD_LENGTH;
     RF_cmdPropTx.pPkt = txPacket;
     RF_cmdPropTx.startTrigger.triggerType = TRIG_ABSTIME;
     RF_cmdPropTx.startTrigger.pastTrig = 1;
@@ -182,7 +185,7 @@ void *mainThread(void *arg0)
     /* Discard packets with CRC error from Rx queue */
     RF_cmdPropRx.rxConf.bAutoFlushCrcErr = 1;
     /* Implement packet length filtering to avoid PROP_ERROR_RXBUF */
-    RF_cmdPropRx.maxPktLen = PAYLOAD_LENGTH;
+    RF_cmdPropRx.maxPktLen = RX_PAYLOAD_LENGTH;
     RF_cmdPropRx.pktConf.bRepeatOk = 0;
     RF_cmdPropRx.pktConf.bRepeatNok = 0;
     RF_cmdPropRx.pOutput = (uint8_t *)&rxStatistics;
@@ -209,7 +212,7 @@ void *mainThread(void *arg0)
         txPacket[0] = (uint8_t)(seqNumber >> 8);
         txPacket[1] = (uint8_t)(seqNumber++);
         uint8_t i;
-        for (i = 2; i < PAYLOAD_LENGTH; i++)
+        for (i = 2; i < TX_PAYLOAD_LENGTH; i++)
         {
             txPacket[i] = rand();
         }
@@ -323,8 +326,10 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
         /* Copy the payload + status byte to the rxPacket variable */
         memcpy(rxPacket, packetDataPointer, (packetLength + 1));
 
+
+
         /* Check the packet against what was transmitted */
-        int16_t status = memcmp(txPacket, rxPacket, packetLength);
+        int16_t status = memcmp(txPacket, rxPacket, packetLength - 1);
 
         if(status == 0)
         {
@@ -332,6 +337,7 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
             PIN_setOutputValue(ledPinHandle, Board_PIN_LED1,
                                !PIN_getOutputValue(Board_PIN_LED1));
             PIN_setOutputValue(ledPinHandle, Board_PIN_LED2, 0);
+            rssi_rec = rxPacket[RX_PAYLOAD_LENGTH];
         }
         else
         {

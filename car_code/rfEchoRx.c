@@ -34,10 +34,18 @@
 /* Standard C Libraries */
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
 
 /* TI Drivers */
 #include <ti/drivers/rf/RF.h>
 #include <ti/drivers/PIN.h>
+#include <ti/drivers/GPIO.h>
+#include <ti/drivers/UART.h>
+
+
+
+
 
 /* Driverlib Header files */
 #include DeviceFamily_constructPath(driverlib/rf_prop_mailbox.h)
@@ -52,19 +60,21 @@
 /***** Defines *****/
 /* Packet RX/TX Configuration */
 /* Max length byte the radio will accept */
-#define PAYLOAD_LENGTH         30
+#define PAYLOAD_LENGTH         2
 /* Set Transmit (echo) delay to 100ms */
 #define TX_DELAY             (uint32_t)(4000000*0.1f)
 /* NOTE: Only two data entries supported at the moment */
 #define NUM_DATA_ENTRIES       2
+
 /* The Data Entries data field will contain:
  * 1 Header byte (RF_cmdPropRx.rxConf.bIncludeHdr = 0x1)
  * Max 30 payload bytes
+ * 1 rssi byte (RF_cmdProbRx.rxConf.bAppendStatus = 0x1)
  * 1 status byte (RF_cmdPropRx.rxConf.bAppendStatus = 0x1) */
-#define NUM_APPENDED_BYTES     2
+#define NUM_APPENDED_BYTES     3
 
 /* Log radio events in the callback */
-//#define LOG_RADIO_EVENTS
+#define LOG_RADIO_EVENTS
 
 /***** Prototypes *****/
 static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e);
@@ -114,7 +124,7 @@ static uint8_t packetLength;
 static uint8_t* packetDataPointer;
 
 
-static uint8_t txPacket[PAYLOAD_LENGTH];
+static uint8_t txPacket[PAYLOAD_LENGTH+1];
 
 #ifdef LOG_RADIO_EVENTS
 static volatile RF_EventMask eventLog[32];
@@ -136,11 +146,26 @@ PIN_Config pinTable[] =
 };
 
 /***** Function definitions *****/
-
+UART_Handle uart;
 void *mainThread(void *arg0)
 {
+
     RF_Params rfParams;
     RF_Params_init(&rfParams);
+
+    UART_Params uartParams;
+
+    UART_init();
+
+
+    UART_Params_init(&uartParams);
+    uartParams.writeDataMode = UART_DATA_BINARY;
+    uartParams.readDataMode = UART_DATA_BINARY;
+    uartParams.readReturnMode = UART_RETURN_FULL;
+    uartParams.readEcho = UART_ECHO_OFF;
+    uartParams.baudRate = 115200;
+
+    uart = UART_open(Board_UART0, &uartParams);
 
     /* Open LED pins */
     ledPinHandle = PIN_open(&ledPinState, pinTable);
@@ -161,6 +186,7 @@ void *mainThread(void *arg0)
         while(1);
     }
 
+
     /* Modify CMD_PROP_TX and CMD_PROP_RX commands for application needs */
     /* Set the Data Entity queue for received data */
     RF_cmdPropRx.pQueue = &dataQueue;
@@ -180,7 +206,7 @@ void *mainThread(void *arg0)
     RF_cmdPropRx.condition.rule = COND_STOP_ON_FALSE;
     RF_cmdPropRx.pOutput = (uint8_t *)&rxStatistics;
 
-    RF_cmdPropTx.pktLen = PAYLOAD_LENGTH;
+    RF_cmdPropTx.pktLen = PAYLOAD_LENGTH + 1;
     RF_cmdPropTx.pPkt = txPacket;
     RF_cmdPropTx.startTrigger.triggerType = TRIG_REL_PREVEND;
     RF_cmdPropTx.startTime = TX_DELAY;
@@ -318,7 +344,7 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
         /* Copy the payload + status byte to the rxPacket variable, and then
          * over to the txPacket
          */
-        memcpy(txPacket, packetDataPointer, packetLength);
+        memcpy(txPacket, packetDataPointer, packetLength + 1);
 
         RFQueue_nextEntry();
     }
