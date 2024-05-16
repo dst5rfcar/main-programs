@@ -38,6 +38,7 @@
 #include <ti/drivers/rf/RF.h>
 #include <ti/drivers/PIN.h>
 #include <ti/drivers/pin/PINCC26XX.h>
+#include <ti/drivers/ADC.h>
 
 /* Driverlib Header files */
 #include DeviceFamily_constructPath(driverlib/rf_prop_mailbox.h)
@@ -54,9 +55,9 @@
 #define TX_PAYLOAD_LENGTH      2
 #define RX_PAYLOAD_LENGTH      3
 /* Set packet interval to 1000ms */
-#define PACKET_INTERVAL     (uint32_t)(4000000*1.0f)
+#define PACKET_INTERVAL     (uint32_t)(400000*1.0f)
 /* Set Receive timeout to 500ms */
-#define RX_TIMEOUT          (uint32_t)(4000000*0.5f)
+#define RX_TIMEOUT          (uint32_t)(400000*0.5f)
 /* NOTE: Only two data entries supported at the moment */
 #define NUM_DATA_ENTRIES    2
 
@@ -68,6 +69,9 @@
 
 /* Log radio events in the callback */
 //#define LOG_RADIO_EVENTS
+
+/* Log rssi in the callback */
+#define LOG_RSSI
 
 /***** Prototypes *****/
 static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e);
@@ -127,6 +131,11 @@ static volatile RF_EventMask eventLog[32];
 static volatile uint8_t evIndex = 0;
 #endif // LOG_RADIO_EVENTS
 
+#ifdef LOG_RSSI
+static volatile int8_t rssiLog[32];
+static volatile uint8_t rssiind = 0;
+#endif
+
 /*
  * Application LED pin configuration table:
  *   - All LEDs board LEDs are off.
@@ -145,6 +154,14 @@ PIN_Config pinTable[] =
 
 void *mainThread(void *arg0)
 {
+    ADC_Handle adc1;
+    ADC_Handle adc2;
+    ADC_Params params1;
+    ADC_Params_init(&params1);
+    uint16_t resultthrust;
+    uint16_t resultstear;
+    uint32_t uvthrust;
+    uint32_t uvstear;
     uint32_t curtime;
     RF_Params rfParams;
     RF_Params_init(&rfParams);
@@ -209,13 +226,22 @@ void *mainThread(void *arg0)
     while(1)
     {
         /* Create packet with incrementing sequence number and random payload */
-        txPacket[0] = (uint8_t)(seqNumber >> 8);
-        txPacket[1] = (uint8_t)(seqNumber++);
-        uint8_t i;
-        for (i = 2; i < TX_PAYLOAD_LENGTH; i++)
-        {
-            txPacket[i] = rand();
-        }
+//        adc1 = ADC_open(24, &params1);
+//        ADC_convert(adc1,&resultthrust);
+//        ADC_close(adc1);
+//        adc1 = ADC_open(23, &params1);
+//        ADC_convert(adc1,&resultstear);
+//        ADC_close(adc1);
+//        uint32_t uvsthrust = ADC_convertToMicroVolts(adc1, resultthrust);
+//        uint32_t uvstear = ADC_convertToMicroVolts(adc2, resultstear);
+//        float stear = (float)uvstear/3300000.0;
+//        float thrust = (float)uvthrust/3300000.0;
+//        uint8_t fstear = (uint8_t)((stear)*255);
+//        uint8_t fthrust = (uint8_t)((thrust)*255);
+        uint8_t fstear = 150;
+        uint8_t fthrust = 255;
+        txPacket[0] = fstear;
+        txPacket[1] = fthrust;
 
         /* Set absolute TX time to utilize automatic power management */
         curtime += PACKET_INTERVAL;
@@ -337,7 +363,10 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
             PIN_setOutputValue(ledPinHandle, Board_PIN_LED1,
                                !PIN_getOutputValue(Board_PIN_LED1));
             PIN_setOutputValue(ledPinHandle, Board_PIN_LED2, 0);
-            rssi_rec = rxPacket[RX_PAYLOAD_LENGTH];
+            rssi_rec = rxPacket[RX_PAYLOAD_LENGTH-1];
+#ifdef LOG_RSSI
+            rssiLog[rssiind++ & 0x1F] = rssi_rec;
+#endif
         }
         else
         {

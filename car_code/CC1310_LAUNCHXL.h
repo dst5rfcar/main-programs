@@ -49,6 +49,8 @@
 extern "C" {
 #endif
 
+#define DEV_BOARD
+
 /* Includes */
 #include <ti/drivers/PIN.h>
 #include <ti/devices/cc13x0/driverlib/ioc.h>
@@ -105,8 +107,8 @@ extern const PIN_Config BoardGpioInitTable[];
 /* LEDs */
 #define CC1310_LAUNCHXL_PIN_LED_ON            1
 #define CC1310_LAUNCHXL_PIN_LED_OFF           0
-#define CC1310_LAUNCHXL_PIN_RLED              IOID_6
-#define CC1310_LAUNCHXL_PIN_GLED              IOID_7
+#define CC1310_LAUNCHXL_PIN_RLED              IOID_8
+#define CC1310_LAUNCHXL_PIN_GLED              IOID_9
 
 /* PWM Outputs */
 #define CC1310_LAUNCHXL_PWMPIN0               CC1310_LAUNCHXL_PIN_RLED
@@ -124,10 +126,10 @@ extern const PIN_Config BoardGpioInitTable[];
 #define CC1310_LAUNCHXL_FLASH_CS_OFF          1
 
 /* SPI Board */
-#define CC1310_LAUNCHXL_SPI0_MISO             IOID_8          /* RF1.20 */
-#define CC1310_LAUNCHXL_SPI0_MOSI             IOID_9          /* RF1.18 */
-#define CC1310_LAUNCHXL_SPI0_CLK              IOID_10         /* RF1.16 */
-#define CC1310_LAUNCHXL_SPI0_CSN              IOID_11
+#define CC1310_LAUNCHXL_SPI0_MISO             IOID_6          /* RF1.20 */
+#define CC1310_LAUNCHXL_SPI0_MOSI             IOID_5          /* RF1.18 */
+#define CC1310_LAUNCHXL_SPI0_CLK              IOID_7         /* RF1.16 */
+#define CC1310_LAUNCHXL_SPI0_CSN              IOID_4
 #define CC1310_LAUNCHXL_SPI1_MISO             PIN_UNASSIGNED
 #define CC1310_LAUNCHXL_SPI1_MOSI             PIN_UNASSIGNED
 #define CC1310_LAUNCHXL_SPI1_CLK              PIN_UNASSIGNED

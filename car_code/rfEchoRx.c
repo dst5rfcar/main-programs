@@ -36,12 +36,13 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <unistd.h>
 
 /* TI Drivers */
 #include <ti/drivers/rf/RF.h>
 #include <ti/drivers/PIN.h>
-#include <ti/drivers/GPIO.h>
-#include <ti/drivers/UART.h>
+#include <ti/drivers/pin/PINCC26XX.h>
+#include <ti/drivers/SPI.h>
 
 
 
@@ -145,27 +146,35 @@ PIN_Config pinTable[] =
  PIN_TERMINATE
 };
 
+/* spi variables*/
+
+SPI_Handle Spi;
+SPI_Params spiParams;
+SPI_Transaction transaction;
+int8_t transmitBuffer[2];
+int8_t recieveBuffer[2];
+bool transferOK;
+int32_t status;
+
+
+
 /***** Function definitions *****/
-UART_Handle uart;
 void *mainThread(void *arg0)
 {
 
     RF_Params rfParams;
     RF_Params_init(&rfParams);
+    SPI_init();
+    SPI_Params_init(&spiParams);
+    spiParams.dataSize = 8;
+    Spi = SPI_open(Board_SPI0, &spiParams);
+    if (Spi == NULL) {
+        while (1);  // SPI_open() failed
+    }
 
-    UART_Params uartParams;
-
-    UART_init();
 
 
-    UART_Params_init(&uartParams);
-    uartParams.writeDataMode = UART_DATA_BINARY;
-    uartParams.readDataMode = UART_DATA_BINARY;
-    uartParams.readReturnMode = UART_RETURN_FULL;
-    uartParams.readEcho = UART_ECHO_OFF;
-    uartParams.baudRate = 115200;
 
-    uart = UART_open(Board_UART0, &uartParams);
 
     /* Open LED pins */
     ledPinHandle = PIN_open(&ledPinState, pinTable);
@@ -328,7 +337,7 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
     {
         /* Successful RX */
         /* Toggle LED2, clear LED1 to indicate RX */
-        PIN_setOutputValue(ledPinHandle, Board_PIN_LED1, 0);
+
         PIN_setOutputValue(ledPinHandle, Board_PIN_LED2,
                            !PIN_getOutputValue(Board_PIN_LED2));
 
@@ -345,6 +354,33 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
          * over to the txPacket
          */
         memcpy(txPacket, packetDataPointer, packetLength + 1);
+        float thrust = (float)txPacket[0];
+        int stearing = (int)txPacket[1];
+        int8_t rssi = txPacket[2];
+        float scaler;
+        if (rssi > -15){
+            scaler = 1;
+        }else if (rssi< -30){
+            scaler = 0;
+        }else{
+            scaler = (-(1.0/15.0)*rssi) - 2;
+        }
+        bool transfer_ok;
+
+        thrust = thrust - 128.0f;
+//        thrust = thrust * scaler;
+        stearing = stearing - 128;
+        int8_t fthrust = (int8_t)(thrust);
+        int8_t fstear = (int8_t)(stearing);
+        transmitBuffer[0] = fthrust;
+        transmitBuffer[1] = fstear;
+        transaction.count = 2;
+        transaction.txBuf = (void *)transmitBuffer;
+        transaction.rxBuf = (void *)recieveBuffer;
+        transfer_ok = SPI_transfer(Spi,&transaction);
+        PIN_setOutputValue(ledPinHandle, Board_PIN_LED1, transfer_ok);
+
+
 
         RFQueue_nextEntry();
     }
@@ -360,7 +396,8 @@ static void echoCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e)
     else // any uncaught event
     {
         /* Error Condition: set LED1, clear LED2 */
-        PIN_setOutputValue(ledPinHandle, Board_PIN_LED1, 1);
+        //PIN_setOutputValue(ledPinHandle, Board_PIN_LED1, 1);
         PIN_setOutputValue(ledPinHandle, Board_PIN_LED2, 0);
     }
 }
+
